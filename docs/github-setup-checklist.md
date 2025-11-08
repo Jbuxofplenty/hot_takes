@@ -74,8 +74,6 @@ This single script will upload **all** secrets to GitHub:
 
 **Firebase:**
 
-- `GOOGLE_SERVICES_JSON`
-- `GOOGLE_SERVICE_INFO_PLIST`
 - `FIREBASE_TOKEN`
 
 The script will:

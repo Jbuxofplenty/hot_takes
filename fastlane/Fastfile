@@ -146,6 +146,7 @@ platform :ios do
       precheck_include_in_app_purchases: false
     )
   end
+end
 
 # Android Platform
 platform :android do

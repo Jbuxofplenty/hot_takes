@@ -8,12 +8,27 @@
         "scheme": "hottakes",
         "userInterfaceStyle": "automatic",
         "newArchEnabled": true,
+        "assetBundlePatterns": ["**/*"],
         "ios": {
-            "supportsTablet": true,
-            "bundleIdentifier": "com.jbuxofplenty.hottakes"
+            "googleServicesFile": "./GoogleService-Info.plist",
+            "supportsTablet": false,
+            "bundleIdentifier": "com.jbuxofplenty.hottakes",
+            "appleTeamId": "FWV22U8U39",
+            "infoPlist": {
+                "ITSAppUsesNonExemptEncryption": false,
+                "CFBundleURLTypes": [
+                    {
+                        "CFBundleURLSchemes": ["hottakes"]
+                    }
+                ]
+            }
         },
         "android": {
+            "googleServicesFile": "./google-services.json",
             "package": "com.jbuxofplenty.hottakes",
+            "runtimeVersion": {
+                "policy": "appVersion"
+            },
             "adaptiveIcon": {
                 "backgroundColor": "#E6F4FE",
                 "foregroundImage": "./src/assets/images/android-icon-foreground.png",
@@ -39,6 +54,20 @@
                     "dark": {
                         "backgroundColor": "#000000"
                     }
+                }
+            ],
+            [
+                "expo-notifications",
+                {
+                    "icon": "./src/assets/icons/android_icon.png",
+                    "color": "#2a5298"
+                }
+            ],
+            [
+                "react-native-google-mobile-ads",
+                {
+                    "androidAppId": "ca-app-pub-8519782324189160~6327493409",
+                    "iosAppId": "ca-app-pub-8519782324189160~8486752889"
                 }
             ]
         ],

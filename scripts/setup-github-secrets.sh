@@ -249,28 +249,6 @@ echo "4. Firebase Configuration"
 echo "========================================"
 echo ""
 
-# Firebase service files
-if [ -f "google-services.json" ]; then
-    echo "📄 Uploading google-services.json..."
-    GOOGLE_SERVICES_JSON_BASE64=$(base64 -i google-services.json)
-    gh secret set GOOGLE_SERVICES_JSON --body "$GOOGLE_SERVICES_JSON_BASE64"
-    echo "✅ GOOGLE_SERVICES_JSON uploaded (base64 encoded)"
-else
-    echo "⚠️  google-services.json not found - Android Firebase won't work"
-    MISSING_VARS+=("google-services.json file")
-fi
-
-if [ -f "GoogleService-Info.plist" ]; then
-    echo "📄 Uploading GoogleService-Info.plist..."
-    GOOGLE_SERVICE_INFO_PLIST_BASE64=$(base64 -i GoogleService-Info.plist)
-    gh secret set GOOGLE_SERVICE_INFO_PLIST --body "$GOOGLE_SERVICE_INFO_PLIST_BASE64"
-    echo "✅ GOOGLE_SERVICE_INFO_PLIST uploaded (base64 encoded)"
-else
-    echo "⚠️  GoogleService-Info.plist not found - iOS Firebase won't work"
-    MISSING_VARS+=("GoogleService-Info.plist file")
-fi
-echo ""
-
 # Firebase Token
 if [ -n "$FIREBASE_TOKEN" ] && [[ "$FIREBASE_TOKEN" != *"your-"* ]]; then
     echo "📤 Uploading Firebase CI Token..."
@@ -312,7 +290,7 @@ echo "📚 What's been uploaded:"
 echo "  • App environment variables (STAGING_ENV_FILE, PRODUCTION_ENV_FILE)"
 echo "  • iOS/App Store Connect credentials"
 echo "  • Android/Google Play credentials"
-echo "  • Firebase configuration files and token"
+echo "  • Firebase token"
 echo ""
 echo "To view your secrets:"
 echo "  gh secret list"

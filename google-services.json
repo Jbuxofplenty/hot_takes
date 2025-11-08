@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "152130189767",
+    "project_id": "hot-takes-18871",
+    "storage_bucket": "hot-takes-18871.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:152130189767:android:895c53cd0e1b46541301e2",
+        "android_client_info": {
+          "package_name": "com.jbuxofplenty.hottakes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "152130189767-4d51qhgji0m6377d7p9tb9j87ruc75bb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.jbuxofplenty.hottakes",
+            "certificate_hash": "4148fd0cf2e3818bf7784cbe3326ee7e5306c111"
+          }
+        },
+        {
+          "client_id": "152130189767-5a7ve9hklrd5lv892k651nq7q59nl4mm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnTtFZIOl-lMGNMkvaFWzXGfyX_g8-RCg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "152130189767-5a7ve9hklrd5lv892k651nq7q59nl4mm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "152130189767-tnrk6er16475e0r3r4u112i0o9kegd3n.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.jbuxofplenty.hottakes"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
