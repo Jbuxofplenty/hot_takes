@@ -1,7 +1,7 @@
 {
     "expo": {
         "name": "Hot Takes",
-        "slug": "hot_takes",
+        "slug": "hot-takes",
         "version": "1.0.0",
         "orientation": "portrait",
         "icon": "./src/assets/images/icon.png",
@@ -74,6 +74,13 @@
         "experiments": {
             "typedRoutes": true,
             "reactCompiler": true
-        }
+        },
+        "extra": {
+            "router": {},
+            "eas": {
+                "projectId": "1a0f5d8b-c240-4c59-bbcd-d1fa29d2a7f1"
+            }
+        },
+        "owner": "jbuxofplenty"
     }
 }
