@@ -17,7 +17,8 @@ IOS_PROJECT_PATH = ENV["IOS_PROJECT_PATH"] || "./ios/#{IOS_SCHEME}.xcodeproj"
 IOS_OUTPUT_NAME = ENV["IOS_OUTPUT_NAME"] || "#{IOS_SCHEME}.ipa"
 
 ANDROID_PACKAGE_NAME = ENV["ANDROID_PACKAGE_NAME"] || "com.example.app"
-ANDROID_PROJECT_DIR = ENV["ANDROID_PROJECT_DIR"] || "./android"
+# Path relative to repo root where bundle exec fastlane is run
+ANDROID_PROJECT_DIR = File.expand_path(ENV["ANDROID_PROJECT_DIR"] || "./android", Dir.pwd)
 
 # iOS Platform
 platform :ios do
@@ -38,13 +39,18 @@ platform :ios do
     
     # Get latest build number from App Store Connect and increment
     # This checks ALL builds across all versions to ensure we never go backwards
-    latest_build = latest_testflight_build_number(
-      api_key: api_key,
-      app_identifier: IOS_APP_IDENTIFIER
-      # Not specifying version - gets highest build across ALL versions
-    )
-    
-    UI.important("📱 Latest TestFlight build number from API: #{latest_build}")
+    begin
+      latest_build = latest_testflight_build_number(
+        api_key: api_key,
+        app_identifier: IOS_APP_IDENTIFIER
+        # Not specifying version - gets highest build across ALL versions
+      )
+      UI.important("📱 Latest TestFlight build number from API: #{latest_build}")
+    rescue => e
+      # No builds exist yet in TestFlight, start at 0
+      UI.message("📱 No builds found in TestFlight (#{e.message}), starting at build 1")
+      latest_build = 0
+    end
     
     # Ensure we always increment from the latest, never go backwards
     new_build = latest_build + 1
@@ -140,58 +146,6 @@ platform :ios do
       precheck_include_in_app_purchases: false
     )
   end
-
-  desc "Build Debug version with symbols for crash analysis"
-  lane :debug do
-    # Setup CI creates a temporary keychain for CI builds
-    setup_ci if ENV['CI']
-    
-    # Sync code signing with development profile
-    sync_code_signing(
-      type: "development",
-      readonly: is_ci,
-      force_for_new_devices: true
-    )
-    
-    # Configure manual code signing for development
-    update_code_signing_settings(
-      use_automatic_signing: false,
-      path: IOS_PROJECT_PATH,
-      team_id: IOS_TEAM_ID,
-      code_sign_identity: "iPhone Developer",
-      profile_name: "match Development #{IOS_APP_IDENTIFIER}",
-      targets: IOS_SCHEME
-    )
-    
-    # Build in Debug configuration with symbols
-    build_app(
-      workspace: IOS_WORKSPACE_PATH,
-      scheme: IOS_SCHEME,
-      configuration: "Debug",
-      export_method: "development",
-      export_options: {
-        provisioningProfiles: {
-          IOS_APP_IDENTIFIER => "match Development #{IOS_APP_IDENTIFIER}"
-        },
-        uploadSymbols: true,
-        compileBitcode: false
-      },
-      output_directory: "./build/ios",
-      output_name: "#{IOS_SCHEME}-Debug.ipa",
-      include_symbols: true,
-      include_bitcode: false
-    )
-    
-    UI.success("🔍 Debug build complete with symbols!")
-    UI.message("📍 IPA: ./build/ios/#{IOS_SCHEME}-Debug.ipa")
-    UI.message("📍 dSYM: ./build/ios/#{IOS_SCHEME}.app.dSYM.zip")
-    UI.message("")
-    UI.message("To install:")
-    UI.message("  1. Connect your device")
-    UI.message("  2. Drag the IPA to Xcode > Devices and Simulators")
-    UI.message("  3. Any crashes will now show file names and line numbers!")
-  end
-end
 
 # Android Platform
 platform :android do
