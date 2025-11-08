@@ -38,6 +38,14 @@ Upload to TestFlight
 
 Upload to App Store
 
+### ios debug
+
+```sh
+[bundle exec] fastlane ios debug
+```
+
+Build Debug version with symbols for crash analysis
+
 ---
 
 ## Android

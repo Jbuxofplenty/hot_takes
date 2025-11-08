@@ -52,5 +52,11 @@ google-service-account.json
 AuthKey_RGCRWYWHJ8.p8
 *.keystore
 
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
 # Misc
 coral_clash

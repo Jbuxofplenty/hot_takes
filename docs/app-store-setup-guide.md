@@ -206,16 +206,25 @@ ANDROID_KEY_PASSWORD=<your-key-password>
 The first Android build MUST be uploaded manually:
 
 ```bash
-# Generate Android project
+# 1. Generate Android project
 npx expo prebuild --platform android --clean
 
-# Build the AAB (Android App Bundle)
-cd android
-./gradlew bundleRelease
+# 2. Load environment variables (contains keystore paths and passwords)
+# IMPORTANT: Must be run from the project root for paths to resolve correctly
+cd /path/to/hot_takes  # Make sure you're in project root
+source .env.fastlane
 
-# The AAB will be at:
+# 3. Build the signed AAB with Fastlane
+bundle exec fastlane android build
+
+# 4. The signed AAB will be at:
 # android/app/build/outputs/bundle/release/app-release.aab
 ```
+
+**Troubleshooting:**
+
+- If you get "Keystore file not found", make sure you ran `source .env.fastlane` from the project root
+- The `.env.fastlane` file uses `${PWD}` to create absolute paths that Gradle requires
 
 **Upload to Play Console:**
 
