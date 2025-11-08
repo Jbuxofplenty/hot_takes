@@ -47,8 +47,8 @@ app-example
 /android
 
 # sensitive files
-fastlane/google-services.json
-fastlane/GoogleService-Info.plist
+google-services.json
+GoogleService-Info.plist
 google-service-account.json
 AuthKey_RGCRWYWHJ8.p8
 *.keystore
