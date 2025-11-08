@@ -78,8 +78,8 @@ echo ""
 
 # These values come from your app.json and Android project
 ANDROID_PACKAGE_NAME="${ANDROID_PACKAGE_NAME:-com.jbuxofplenty.hottakes}"
-# Path relative to fastlane/ directory (where Fastfile is located)
-ANDROID_PROJECT_DIR="${ANDROID_PROJECT_DIR:-../android}"
+# Path relative to repo root (where 'bundle exec fastlane' runs from)
+ANDROID_PROJECT_DIR="${ANDROID_PROJECT_DIR:-./android}"
 
 echo "📤 Setting Android configuration variables..."
 gh variable set ANDROID_PACKAGE_NAME --body "$ANDROID_PACKAGE_NAME"

@@ -17,7 +17,8 @@ IOS_PROJECT_PATH = ENV["IOS_PROJECT_PATH"] || "./ios/#{IOS_SCHEME}.xcodeproj"
 IOS_OUTPUT_NAME = ENV["IOS_OUTPUT_NAME"] || "#{IOS_SCHEME}.ipa"
 
 ANDROID_PACKAGE_NAME = ENV["ANDROID_PACKAGE_NAME"] || "com.jbuxofplenty.hottakes"
-# Path relative to Fastfile location (fastlane/ directory) - use ../android to go up to repo root
+# If ENV var is set: path relative to where fastlane runs (repo root), so use ./android
+# If fallback: path relative to Fastfile location (fastlane/ dir), so use ../android
 ANDROID_PROJECT_DIR = ENV["ANDROID_PROJECT_DIR"] || File.expand_path("../android", __dir__)
 
 # iOS Platform
