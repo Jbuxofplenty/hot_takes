@@ -1,0 +1,276 @@
+# Fastfile for React Native Apps
+# Documentation: https://docs.fastlane.tools
+#
+# This Fastfile is generalized to work with any React Native app.
+# Configure app-specific values via GitHub Actions Variables or environment variables.
+
+default_platform(:ios)
+
+# ========================================
+# Configuration from Environment Variables
+# ========================================
+IOS_APP_IDENTIFIER = ENV["IOS_APP_IDENTIFIER"] || "com.example.app"
+IOS_TEAM_ID = ENV["IOS_TEAM_ID"] || ""
+IOS_SCHEME = ENV["IOS_SCHEME"] || "App"
+IOS_WORKSPACE_PATH = ENV["IOS_WORKSPACE_PATH"] || "./ios/#{IOS_SCHEME}.xcworkspace"
+IOS_PROJECT_PATH = ENV["IOS_PROJECT_PATH"] || "./ios/#{IOS_SCHEME}.xcodeproj"
+IOS_OUTPUT_NAME = ENV["IOS_OUTPUT_NAME"] || "#{IOS_SCHEME}.ipa"
+
+ANDROID_PACKAGE_NAME = ENV["ANDROID_PACKAGE_NAME"] || "com.example.app"
+ANDROID_PROJECT_DIR = ENV["ANDROID_PROJECT_DIR"] || "./android"
+
+# iOS Platform
+platform :ios do
+  desc "Build iOS app"
+  lane :build do |options|
+    # Setup CI creates a temporary keychain for CI builds
+    setup_ci if ENV['CI']
+    
+    # Setup App Store Connect API Key if provided
+    api_key = nil
+    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      api_key = app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      )
+    end
+    
+    # Get latest build number from App Store Connect and increment
+    # This checks ALL builds across all versions to ensure we never go backwards
+    latest_build = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: IOS_APP_IDENTIFIER
+      # Not specifying version - gets highest build across ALL versions
+    )
+    
+    UI.important("📱 Latest TestFlight build number from API: #{latest_build}")
+    
+    # Ensure we always increment from the latest, never go backwards
+    new_build = latest_build + 1
+    UI.success("📱 Setting new build number to: #{new_build}")
+    
+    # Increment build number to be higher than what's in App Store Connect
+    increment_build_number(
+      xcodeproj: IOS_PROJECT_PATH,
+      build_number: new_build
+    )
+    
+    # Sync code signing first to download provisioning profiles
+    # Force regenerate if needed to include all capabilities (Associated Domains, Push Notifications)
+    sync_code_signing(
+      type: "appstore",
+      readonly: is_ci,
+      api_key: api_key,
+      force_for_new_devices: !is_ci  # Regenerate locally if devices change
+    )
+    
+    # Configure manual code signing (expo prebuild defaults to automatic)
+    # Must be done AFTER sync_code_signing downloads the profile
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: IOS_PROJECT_PATH,
+      team_id: IOS_TEAM_ID,
+      code_sign_identity: "iPhone Distribution",
+      profile_name: "match AppStore #{IOS_APP_IDENTIFIER}",
+      targets: IOS_SCHEME
+    )
+    
+    # Build the app
+    build_app(
+      workspace: IOS_WORKSPACE_PATH,
+      scheme: IOS_SCHEME,
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          IOS_APP_IDENTIFIER => "match AppStore #{IOS_APP_IDENTIFIER}"
+        }
+      },
+      output_directory: "./build/ios",
+      output_name: IOS_OUTPUT_NAME
+    )
+  end
+
+  desc "Upload to TestFlight"
+  lane :beta do
+    build
+    
+    # Setup App Store Connect API Key if provided
+    api_key = nil
+    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      api_key = app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      )
+    end
+    
+    # Upload to TestFlight
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false,
+      changelog: ENV["CHANGELOG"] || "Bug fixes and performance improvements"
+    )
+  end
+
+  desc "Upload to App Store"
+  lane :release do
+    build
+    
+    # Setup App Store Connect API Key if provided
+    api_key = nil
+    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      api_key = app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      )
+    end
+    
+    # Upload to App Store
+    upload_to_app_store(
+      api_key: api_key,
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Build Debug version with symbols for crash analysis"
+  lane :debug do
+    # Setup CI creates a temporary keychain for CI builds
+    setup_ci if ENV['CI']
+    
+    # Sync code signing with development profile
+    sync_code_signing(
+      type: "development",
+      readonly: is_ci,
+      force_for_new_devices: true
+    )
+    
+    # Configure manual code signing for development
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: IOS_PROJECT_PATH,
+      team_id: IOS_TEAM_ID,
+      code_sign_identity: "iPhone Developer",
+      profile_name: "match Development #{IOS_APP_IDENTIFIER}",
+      targets: IOS_SCHEME
+    )
+    
+    # Build in Debug configuration with symbols
+    build_app(
+      workspace: IOS_WORKSPACE_PATH,
+      scheme: IOS_SCHEME,
+      configuration: "Debug",
+      export_method: "development",
+      export_options: {
+        provisioningProfiles: {
+          IOS_APP_IDENTIFIER => "match Development #{IOS_APP_IDENTIFIER}"
+        },
+        uploadSymbols: true,
+        compileBitcode: false
+      },
+      output_directory: "./build/ios",
+      output_name: "#{IOS_SCHEME}-Debug.ipa",
+      include_symbols: true,
+      include_bitcode: false
+    )
+    
+    UI.success("🔍 Debug build complete with symbols!")
+    UI.message("📍 IPA: ./build/ios/#{IOS_SCHEME}-Debug.ipa")
+    UI.message("📍 dSYM: ./build/ios/#{IOS_SCHEME}.app.dSYM.zip")
+    UI.message("")
+    UI.message("To install:")
+    UI.message("  1. Connect your device")
+    UI.message("  2. Drag the IPA to Xcode > Devices and Simulators")
+    UI.message("  3. Any crashes will now show file names and line numbers!")
+  end
+end
+
+# Android Platform
+platform :android do
+  desc "Build Android app"
+  lane :build do |options|
+    track = options[:track] || "internal"
+    
+    # Get latest version code from ALL Play Store tracks and increment
+    all_version_codes = []
+    
+    # Check all tracks (internal, alpha, beta, production)
+    ['internal', 'alpha', 'beta', 'production'].each do |track_name|
+      begin
+        versions = google_play_track_version_codes(
+          package_name: ANDROID_PACKAGE_NAME,
+          track: track_name,
+          json_key: ENV["GOOGLE_PLAY_JSON_KEY_PATH"]
+        )
+        all_version_codes.concat(versions) if versions
+        UI.message("📱 Track '#{track_name}': #{versions.join(', ')}") if versions && !versions.empty?
+      rescue => e
+        # Track might not exist yet, that's fine
+        UI.message("📱 Track '#{track_name}': No versions found")
+      end
+    end
+    
+    # If there are existing versions, use the highest + 1, otherwise start at 1
+    latest_version_code = all_version_codes.max || 0
+    new_version_code = latest_version_code + 1
+    
+    UI.success("📱 Highest existing version code: #{latest_version_code}")
+    UI.success("📱 New version code: #{new_version_code}")
+    
+    # Build the app with version code as Gradle property (no file modification needed!)
+    gradle(
+      project_dir: ANDROID_PROJECT_DIR,
+      task: "bundle",
+      build_type: "Release",
+      properties: {
+        "android.injected.signing.store.file" => ENV["ANDROID_KEYSTORE_PATH"],
+        "android.injected.signing.store.password" => ENV["ANDROID_KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["ANDROID_KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["ANDROID_KEY_PASSWORD"],
+        "versionCode" => new_version_code.to_s
+      }
+    )
+  end
+
+  desc "Upload to Play Store Internal Testing"
+  lane :beta do
+    build(track: "internal")
+    
+    # Upload to Play Store Internal Testing track
+    upload_to_play_store(
+      package_name: ANDROID_PACKAGE_NAME,
+      track: "internal",
+      aab: "#{ANDROID_PROJECT_DIR}/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      json_key: ENV["GOOGLE_PLAY_JSON_KEY_PATH"]
+    )
+  end
+
+  desc "Upload to Play Store Production"
+  lane :release do
+    build(track: "production")
+    
+    # Upload to Play Store Production track
+    upload_to_play_store(
+      package_name: ANDROID_PACKAGE_NAME,
+      track: "production",
+      aab: "#{ANDROID_PROJECT_DIR}/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "draft",
+      json_key: ENV["GOOGLE_PLAY_JSON_KEY_PATH"]
+    )
+  end
+end
+

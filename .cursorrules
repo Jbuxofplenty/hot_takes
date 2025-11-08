@@ -1,0 +1,69 @@
+# Cursor AI Rules for Hot Takes
+
+## Git Commit Guidelines
+
+- ALWAYS use conventional commit format: `<type>(<scope>): <subject>`
+- Scope is **required** (enforced by commitlint)
+- Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+- Valid scopes: client, server, ci, docs, deps, config
+- Examples:
+    - `feat(ci): add test gate before staging deployment`
+    - `fix(client): add encryption exemption to Info.plist`
+    - `docs(docs): add approval setup guide`
+    - `refactor(ci): simplify platform selection logic`
+    - `chore(deps): update Firebase SDK to latest version`
+    - `feat(server): add user authentication endpoint`
+
+## Git Operations
+
+- NEVER run `git commit/push` unless explicitly requested by the user
+- Ask for confirmation before force pushing or destructive git operations
+
+## Firebase Development
+
+- NEVER restart Firebase emulators unless explicitly requested
+- NEVER stop running Firebase emulators automatically
+- Keep emulators running in the background
+- Always add tests to functions (i.e. routes, triggers, scheduled funcs)
+
+## Development Workflow
+
+- Run tests before suggesting deployment
+- Use iOS as default platform (until Android setup is complete)
+- Prefer `yarn` over `npm` for package management
+
+## Code Quality
+
+- Follow existing code style and patterns in the repository
+- Use TypeScript types when working with shared module
+- Keep functions focused and single-purpose
+- Always add tests for BE related code (not react components atm)
+
+## Testing
+
+- **ALWAYS** write tests for BE APIs (firebase functions)
+- All tests must pass before committing - remove or fix failing tests
+- When running tests on the BE firebase functions, you need to execute the `yarn test` command from the `functions` directory
+- For UI related tests, run from the root of the repo
+
+## Documentation
+
+- Update relevant documentation when making significant changes
+- Include examples in documentation
+- Keep docs concise and actionable
+
+## Build & Deployment
+
+- Use Fastlane for building and submitting apps (iOS & Android)
+- Use `npx expo prebuild` to generate native directories
+- Never commit generated `ios/` or `android/` directories
+- Version bumping is handled by CI/CD workflows
+- iOS builds require Fastlane Match for code signing
+- Android builds require keystore (never commit `.keystore` files)
+
+## Communication
+
+- Be concise but thorough in explanations
+- Show what changed and why it matters
+- Provide examples when introducing new patterns
+- Add documentation markdown file to docs folder for complex features/architecture

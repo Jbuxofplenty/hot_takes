@@ -1,0 +1,339 @@
+name: Build and Submit (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        description: 'Build profile to use (preview, production)'
+        required: true
+        type: string
+      platform:
+        description: 'Platform to deploy (ios, android, all)'
+        required: false
+        default: 'all'
+        type: string
+      environment:
+        description: 'GitHub environment name for deployment protection'
+        required: false
+        type: string
+    secrets:
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: true
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: true
+      APP_STORE_CONNECT_API_KEY_CONTENT:
+        required: true
+      APPLE_ID:
+        required: true
+      MATCH_PASSWORD:
+        required: true
+      MATCH_GIT_BASIC_AUTHORIZATION:
+        required: true
+      GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:
+        required: true
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+
+jobs:
+  build-ios:
+    name: Build and Submit iOS
+    if: inputs.platform == 'ios' || inputs.platform == 'all'
+    runs-on: macos-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Configure Git Authentication for Match
+        env:
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+        run: |
+          # Decode username:token from base64
+          decoded=$(echo "$MATCH_GIT_BASIC_AUTHORIZATION" | base64 --decode)
+          username=$(echo "$decoded" | cut -d: -f1)
+          token=$(echo "$decoded" | cut -d: -f2)
+          
+          # Configure git to use token authentication for GitHub
+          git config --global url."https://${username}:${token}@github.com/".insteadOf "https://github.com/"
+          
+          echo "✅ Git configured for Fastlane Match"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Setup App Store Connect API Key
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          # Use echo -e to interpret escape sequences (\n) in the key content
+          echo -e "${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$HOME/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8" >> $GITHUB_ENV
+          echo "APP_STORE_CONNECT_API_KEY_KEY_ID=${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" >> $GITHUB_ENV
+          echo "APP_STORE_CONNECT_API_KEY_ISSUER_ID=${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" >> $GITHUB_ENV
+
+      - name: Restore Firebase Service Files
+        run: |
+          echo "📄 Restoring Firebase service files..."
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > google-services.json
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -d > GoogleService-Info.plist
+          echo "✅ Firebase service files restored"
+
+      - name: Restore and Load Environment Variables
+        run: |
+          echo "📝 Restoring .env file for ${{ inputs.profile }} environment..."
+          if [ "${{ inputs.profile }}" == "preview" ]; then
+            echo "${{ secrets.STAGING_ENV_FILE }}" > .env
+          else
+            echo "${{ secrets.PRODUCTION_ENV_FILE }}" > .env
+          fi
+          echo "✅ .env file restored ($(wc -l < .env) lines)"
+          
+          # Show first few lines for debugging
+          echo "🔍 Debug: First 3 lines (sanitized):"
+          head -3 .env | sed 's/=.*/=***/'
+          
+          # Export variables to GITHUB_ENV for subsequent steps
+          echo "🔧 Loading environment variables..."
+          cat .env >> $GITHUB_ENV
+          
+          echo "✅ Environment variables loaded to GITHUB_ENV"
+          echo "🔍 Debug: Checking loaded variables (sanitized)..."
+          grep EXPO_PUBLIC .env | head -3 | sed 's/=.*/=***/'
+
+      - name: Run Expo Prebuild for iOS
+        run: |
+          echo "🔨 Running Expo prebuild for iOS with ${{ inputs.profile }} environment variables..."
+          npx expo prebuild --platform ios --clean
+          echo "✅ Expo prebuild complete"
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Bundle JavaScript with Expo
+        run: |
+          echo "📦 Bundling JavaScript for iOS (${{ inputs.profile }})..."
+          npx expo export:embed --eager --platform ios --dev false
+          echo "✅ iOS JavaScript bundle created with ${{ inputs.profile }} environment variables"
+
+      - name: Build and Submit to TestFlight (Preview)
+        if: inputs.profile == 'preview'
+        env:
+          # Secrets
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ env.APP_STORE_CONNECT_API_KEY_PATH }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID }}
+          # App Configuration (from GitHub Variables)
+          IOS_APP_IDENTIFIER: ${{ vars.IOS_APP_IDENTIFIER }}
+          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+          IOS_SCHEME: ${{ vars.IOS_SCHEME }}
+          IOS_WORKSPACE_PATH: ${{ vars.IOS_WORKSPACE_PATH }}
+          IOS_PROJECT_PATH: ${{ vars.IOS_PROJECT_PATH }}
+          IOS_OUTPUT_NAME: ${{ vars.IOS_OUTPUT_NAME }}
+          CI: true
+        run: bundle exec fastlane ios beta
+
+      - name: Build and Submit to App Store (Production)
+        if: inputs.profile == 'production'
+        env:
+          # Secrets
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ env.APP_STORE_CONNECT_API_KEY_PATH }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID }}
+          # App Configuration (from GitHub Variables)
+          IOS_APP_IDENTIFIER: ${{ vars.IOS_APP_IDENTIFIER }}
+          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+          IOS_SCHEME: ${{ vars.IOS_SCHEME }}
+          IOS_WORKSPACE_PATH: ${{ vars.IOS_WORKSPACE_PATH }}
+          IOS_PROJECT_PATH: ${{ vars.IOS_PROJECT_PATH }}
+          IOS_OUTPUT_NAME: ${{ vars.IOS_OUTPUT_NAME }}
+          CI: true
+        run: bundle exec fastlane ios release
+
+      - name: Upload iOS build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-${{ inputs.profile }}
+          path: |
+            ./build/ios/*.ipa
+            ./ios/fastlane/report.xml
+          retention-days: 30
+
+  build-android:
+    name: Build and Submit Android
+    if: inputs.platform == 'android' || inputs.platform == 'all'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Restore Firebase Service Files
+        run: |
+          echo "📄 Restoring Firebase service files..."
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > google-services.json
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -d > GoogleService-Info.plist
+          echo "✅ Firebase service files restored"
+
+      - name: Restore and Load Environment Variables
+        run: |
+          echo "📝 Restoring .env file for ${{ inputs.profile }} environment..."
+          if [ "${{ inputs.profile }}" == "preview" ]; then
+            echo "${{ secrets.STAGING_ENV_FILE }}" > .env
+          else
+            echo "${{ secrets.PRODUCTION_ENV_FILE }}" > .env
+          fi
+          echo "✅ .env file restored ($(wc -l < .env) lines)"
+          
+          # Show first few lines for debugging
+          echo "🔍 Debug: First 3 lines (sanitized):"
+          head -3 .env | sed 's/=.*/=***/'
+          
+          # Export variables to GITHUB_ENV for subsequent steps
+          echo "🔧 Loading environment variables..."
+          cat .env >> $GITHUB_ENV
+          
+          echo "✅ Environment variables loaded to GITHUB_ENV"
+          echo "🔍 Debug: Checking loaded variables (sanitized)..."
+          grep EXPO_PUBLIC .env | head -3 | sed 's/=.*/=***/'
+
+      - name: Run Expo Prebuild for Android
+        run: |
+          echo "🔨 Running Expo prebuild for Android with ${{ inputs.profile }} environment variables..."
+          npx expo prebuild --platform android --clean
+          echo "✅ Expo prebuild complete"
+
+      - name: Configure Dynamic Version Code
+        run: |
+          # Update build.gradle to read versionCode from Gradle property
+          sed -i 's/versionCode [0-9]*/versionCode project.hasProperty("versionCode") ? project.property("versionCode").toInteger() : 1/' android/app/build.gradle
+          echo "✅ Configured dynamic versionCode in build.gradle"
+
+      - name: Update Gradle Memory Settings
+        run: |
+          # Update JVM memory settings for large builds
+          sed -i 's/org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m/' android/gradle.properties
+
+      - name: Setup Android Keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+          echo "ANDROID_KEYSTORE_PATH=${{ github.workspace }}/android/app/release.keystore" >> $GITHUB_ENV
+
+      - name: Setup Google Play Service Account
+        run: |
+          echo '${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}' > google-play-key.json
+          echo "GOOGLE_PLAY_JSON_KEY_PATH=${{ github.workspace }}/google-play-key.json" >> $GITHUB_ENV
+
+      - name: Bundle JavaScript with Expo
+        run: |
+          echo "📦 Bundling JavaScript for Android (${{ inputs.profile }})..."
+          npx expo export:embed --eager --platform android --dev false
+          echo "✅ Android JavaScript bundle created with ${{ inputs.profile }} environment variables"
+
+      - name: Build and Submit to Internal Testing (Preview)
+        if: inputs.profile == 'preview'
+        env:
+          # Secrets
+          ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ env.GOOGLE_PLAY_JSON_KEY_PATH }}
+          # App Configuration (from GitHub Variables)
+          ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME }}
+          ANDROID_PROJECT_DIR: ${{ vars.ANDROID_PROJECT_DIR }}
+        run: bundle exec fastlane android beta
+
+      - name: Build and Submit to Production (Production)
+        if: inputs.profile == 'production'
+        env:
+          # Secrets
+          ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ env.GOOGLE_PLAY_JSON_KEY_PATH }}
+          # App Configuration (from GitHub Variables)
+          ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME }}
+          ANDROID_PROJECT_DIR: ${{ vars.ANDROID_PROJECT_DIR }}
+        run: bundle exec fastlane android release
+
+      - name: Upload Android build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-${{ inputs.profile }}
+          path: |
+            ./android/app/build/outputs/bundle/release/*.aab
+            ./android/app/build/outputs/apk/release/*.apk
+            ./android/fastlane/report.xml
+          retention-days: 30
+
+  summary:
+    name: Build Summary
+    needs: [build-ios, build-android]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Build summary
+        run: |
+          echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Profile**: ${{ inputs.profile }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platform**: ${{ inputs.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **iOS Status**: ${{ needs.build-ios.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Android Status**: ${{ needs.build-android.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.profile }}" == "preview" ]; then
+            echo "📱 **iOS**: Check TestFlight for build availability" >> $GITHUB_STEP_SUMMARY
+            echo "🤖 **Android**: Check Play Console Internal Testing track" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📱 **iOS**: Build submitted to App Store (pending review)" >> $GITHUB_STEP_SUMMARY
+            echo "🤖 **Android**: Build submitted to Play Store (pending review)" >> $GITHUB_STEP_SUMMARY
+          fi

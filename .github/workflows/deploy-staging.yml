@@ -1,0 +1,164 @@
+name: Deploy to Staging (TestFlight/Internal Testing)
+
+permissions:
+  contents: write  # Allow pushing tags
+
+on:
+  # Trigger on staging tags (e.g., v1.8.0-beta.1) or push to develop branch
+  push:
+    tags:
+      - 'v*-beta.*'
+      - 'v*-rc.*'
+    branches:
+      - develop
+  
+  # Allow manual triggering from GitHub UI
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to deploy (ios, android, all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - ios
+          - android
+          - all
+
+# Prevent concurrent deployments - cancel in-progress runs when new one starts
+concurrency:
+  group: staging-deployment
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Tests
+    uses: ./.github/workflows/test.yml
+  
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [test]
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    uses: ./.github/workflows/build-and-submit.yml
+    with:
+      profile: 'preview'
+      platform: ${{ github.event.inputs.platform || 'all' }}
+      environment: 'staging'
+    secrets: inherit
+  
+  deploy-firebase:
+    name: Deploy Firebase Functions
+    needs: deploy-staging
+    uses: ./.github/workflows/firebase-deploy.yml
+    with:
+      target: 'all'
+    secrets:
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+  
+  promote-gate:
+    name: Approve for Production
+    needs: [deploy-staging, deploy-firebase]
+    runs-on: ubuntu-latest
+    environment:
+      name: production-approval
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    outputs:
+      staging_tag: ${{ steps.extract.outputs.staging_tag }}
+      should_promote: ${{ steps.extract.outputs.should_promote }}
+      is_branch: ${{ steps.extract.outputs.is_branch }}
+      platform: ${{ steps.platform.outputs.platform }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract platform selection
+        id: platform
+        run: |
+          # Get platform from manual trigger or default to 'all'
+          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
+          echo "📱 Platform: $PLATFORM"
+      
+      - name: Determine staging tag
+        id: extract
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Tag-based deployment
+            STAGING_TAG="${GITHUB_REF#refs/tags/}"
+            echo "is_branch=false" >> $GITHUB_OUTPUT
+            echo "🏷️  Using existing staging tag: $STAGING_TAG"
+          else
+            # Branch-based deployment - use latest beta/rc tag
+            echo "is_branch=true" >> $GITHUB_OUTPUT
+            
+            # Get the latest beta/rc tag
+            LATEST_STAGING_TAG=$(git tag -l 'v*' | grep -E '(beta|rc)' | sort -V | tail -n1)
+            
+            if [ -z "$LATEST_STAGING_TAG" ]; then
+              # No existing staging tags, start at v1.0.0-beta.1
+              STAGING_TAG="v1.0.0-beta.1"
+              echo "🆕 No existing staging tags found - creating initial tag: $STAGING_TAG"
+            else
+              # Use the latest staging tag
+              STAGING_TAG="$LATEST_STAGING_TAG"
+              echo "📊 Using latest staging tag: $STAGING_TAG"
+            fi
+          fi
+          
+          echo "staging_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
+          echo "should_promote=true" >> $GITHUB_OUTPUT
+      
+      - name: Create staging tag for branch deployment
+        if: steps.extract.outputs.is_branch == 'true'
+        run: |
+          STAGING_TAG="${{ steps.extract.outputs.staging_tag }}"
+          
+          # Configure git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Check if tag already exists
+          if git rev-parse "$STAGING_TAG" >/dev/null 2>&1; then
+            echo "⚠️  Tag $STAGING_TAG already exists - skipping creation"
+            echo "ℹ️  Will use existing tag for deployment"
+          else
+            # Create and push staging tag
+            git tag -a "$STAGING_TAG" -m "Auto-generated staging tag from ${{ github.ref_name }}"
+            git push origin "$STAGING_TAG"
+            echo "✅ Created staging tag: $STAGING_TAG"
+          fi
+      
+      - name: Ready to promote
+        run: |
+          echo "### ✅ Staging Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.extract.outputs.is_branch }}" = "true" ]; then
+            echo "Branch **${{ github.ref_name }}** has been deployed to TestFlight." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Auto-generated staging tag: **${{ steps.extract.outputs.staging_tag }}**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Staging tag **${{ steps.extract.outputs.staging_tag }}** has been deployed to TestFlight." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Staging Platform**: ${{ steps.platform.outputs.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🧪 **Test the staging build**, then approve this step to promote to production." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Production tag will be: **$(echo ${{ steps.extract.outputs.staging_tag }} | sed -E 's/-beta\.[0-9]+$//' | sed -E 's/-rc\.[0-9]+$//')**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📱 _Production will deploy to **all platforms** (iOS + Android)_" >> $GITHUB_STEP_SUMMARY
+  
+  promote-to-production:
+    name: Promote to Production
+    needs: promote-gate
+    if: needs.promote-gate.outputs.should_promote == 'true'
+    uses: ./.github/workflows/promote-to-production.yml
+    with:
+      staging_tag: ${{ needs.promote-gate.outputs.staging_tag }}
+    secrets: inherit

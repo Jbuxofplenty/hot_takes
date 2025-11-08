@@ -1,0 +1,196 @@
+name: Promote to Production
+
+permissions:
+  contents: write  # Allow pushing tags
+
+on:
+  # Called by staging workflow after approval
+  workflow_call:
+    inputs:
+      staging_tag:
+        description: 'Staging tag to promote (e.g., v1.8.0-beta.1)'
+        required: true
+        type: string
+  
+  # Manual trigger to promote a staging release to production
+  workflow_dispatch:
+    inputs:
+      staging_tag:
+        description: 'Staging tag to promote (e.g., v1.8.0-beta.1)'
+        required: true
+        type: string
+
+jobs:
+  promote:
+    name: Promote Staging to Production
+    runs-on: ubuntu-latest
+    outputs:
+      production_tag: ${{ steps.validate.outputs.production_tag }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Validate staging tag
+        id: validate
+        run: |
+          # Support both workflow_call (from staging) and workflow_dispatch (manual)
+          STAGING_TAG="${{ inputs.staging_tag || github.event.inputs.staging_tag }}"
+          
+          if [ -z "$STAGING_TAG" ]; then
+            echo "❌ Error: staging_tag input is required"
+            exit 1
+          fi
+          
+          # Check if tag exists
+          if ! git rev-parse "$STAGING_TAG" >/dev/null 2>&1; then
+            echo "❌ Error: Tag $STAGING_TAG does not exist"
+            exit 1
+          fi
+          
+          # Check if it's a staging tag (contains -beta or -rc)
+          if [[ ! "$STAGING_TAG" =~ -beta\. ]] && [[ ! "$STAGING_TAG" =~ -rc\. ]]; then
+            echo "❌ Error: $STAGING_TAG is not a staging tag (must contain -beta. or -rc.)"
+            exit 1
+          fi
+          
+          # Extract production version (remove -beta.X or -rc.X suffix)
+          PROD_TAG=$(echo "$STAGING_TAG" | sed -E 's/-beta\.[0-9]+$//' | sed -E 's/-rc\.[0-9]+$//')
+          
+          echo "✅ Staging tag: $STAGING_TAG"
+          echo "✅ Production tag: $PROD_TAG"
+          echo "staging_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
+          echo "production_tag=$PROD_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Check if production tag already exists
+        id: check_tag
+        run: |
+          PROD_TAG="${{ steps.validate.outputs.production_tag }}"
+          
+          if git rev-parse "$PROD_TAG" >/dev/null 2>&1; then
+            echo "⚠️  Warning: Production tag $PROD_TAG already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Production tag $PROD_TAG does not exist - will create"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create production tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          STAGING_TAG="${{ steps.validate.outputs.staging_tag }}"
+          PROD_TAG="${{ steps.validate.outputs.production_tag }}"
+          
+          # Configure git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Get the commit SHA of the staging tag
+          COMMIT_SHA=$(git rev-parse "$STAGING_TAG")
+          
+          # Create and push production tag
+          git tag -a "$PROD_TAG" "$COMMIT_SHA" -m "Promote $STAGING_TAG to production"
+          git push origin "$PROD_TAG"
+          
+          echo "✅ Created and pushed production tag: $PROD_TAG"
+          echo "📝 Commit SHA: $COMMIT_SHA"
+      
+      - name: Update app.json with production version
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          PROD_TAG="${{ steps.validate.outputs.production_tag }}"
+          # Remove 'v' prefix for app.json version
+          PROD_VERSION="${PROD_TAG#v}"
+          
+          # Configure git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Checkout develop branch
+          git fetch origin develop
+          git checkout develop
+          
+          # Update version in app.json
+          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$PROD_VERSION\"/" app.json
+          rm app.json.bak
+          
+          # Commit and push
+          if git diff --quiet app.json; then
+            echo "⚠️  app.json already has version $PROD_VERSION"
+          else
+            git add app.json
+            git commit -m "chore(release): bump version to $PROD_VERSION [skip ci]"
+            git push origin develop
+            echo "✅ Updated app.json to version: $PROD_VERSION"
+          fi
+      
+      - name: Create next staging version
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          PROD_TAG="${{ steps.validate.outputs.production_tag }}"
+          
+          # Configure git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Extract version numbers and bump minor
+          VERSION_NUM="${PROD_TAG#v}"
+          MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+          MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+          PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+          
+          # Bump minor version, reset patch to 0
+          MINOR=$((MINOR + 1))
+          NEXT_VERSION="v${MAJOR}.${MINOR}.0"
+          NEXT_STAGING_TAG="${NEXT_VERSION}-beta.1"
+          
+          echo "📊 Production version: $PROD_TAG"
+          echo "🆕 Next staging version: $NEXT_STAGING_TAG"
+          
+          # Create next staging tag (pointing to latest develop)
+          git fetch origin develop
+          git checkout develop
+          
+          # Check if tag already exists
+          if git rev-parse "$NEXT_STAGING_TAG" >/dev/null 2>&1; then
+            echo "⚠️  Tag $NEXT_STAGING_TAG already exists - skipping"
+          else
+            git tag -a "$NEXT_STAGING_TAG" -m "Prepare next staging version after $PROD_TAG release"
+            git push origin "$NEXT_STAGING_TAG"
+            echo "✅ Created next staging tag: $NEXT_STAGING_TAG"
+          fi
+      
+      - name: Summary
+        run: |
+          PROD_TAG="${{ steps.validate.outputs.production_tag }}"
+          
+          echo "### 🚀 Promotion Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Staging Tag**: ${{ steps.validate.outputs.staging_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Production Tag**: ${{ steps.validate.outputs.production_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platform**: All (iOS + Android)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check_tag.outputs.exists }}" = "true" ]; then
+            echo "⚠️  Production tag already exists - deployment will use existing build" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Production tag created - deployment triggered automatically" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Calculate next staging tag for summary
+            VERSION_NUM="${PROD_TAG#v}"
+            MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+            MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+            PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+            MINOR=$((MINOR + 1))
+            NEXT_STAGING_TAG="v${MAJOR}.${MINOR}.0-beta.1"
+            
+            echo "📦 **app.json** updated on develop branch" >> $GITHUB_STEP_SUMMARY
+            echo "🏷️  **Next staging tag created**: $NEXT_STAGING_TAG" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Monitor deployment: [GitHub Actions](https://github.com/${{ github.repository }}/actions/workflows/deploy.yml)" >> $GITHUB_STEP_SUMMARY
