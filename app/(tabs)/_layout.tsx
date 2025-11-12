@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 
 import { HapticTab } from '@/components/haptic-tab';
@@ -21,8 +21,8 @@ export default function TabLayout() {
                     backgroundColor: colors.BACKGROUND,
                     borderTopColor: colors.BLACK,
                     borderTopWidth: 2,
-                    height: Platform.OS === 'ios' ? verticalScale(90) : verticalScale(75),
-                    paddingBottom: Platform.OS === 'ios' ? verticalScale(25) : verticalScale(15),
+                    height: verticalScale(75),
+                    paddingBottom: verticalScale(15),
                     paddingTop: verticalScale(12),
                 },
                 tabBarLabelStyle: {

@@ -6,6 +6,7 @@ import {
     ActivityIndicator,
     Dimensions,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     ScrollView,
     StyleSheet,
@@ -46,6 +47,8 @@ export default function LoginScreen() {
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
     const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
+    const [isOver18, setIsOver18] = useState(false);
+    const [acceptedContestTerms, setAcceptedContestTerms] = useState(false);
 
     const emailRef = useRef<TextInput>(null);
     const passwordRef = useRef<TextInput>(null);
@@ -100,6 +103,16 @@ export default function LoginScreen() {
                 setError(
                     'Username can only contain letters, numbers, spaces, underscores, and hyphens'
                 );
+                return;
+            }
+
+            if (!isOver18) {
+                setError('You must be 18 or older to create an account');
+                return;
+            }
+
+            if (!acceptedContestTerms) {
+                setError('You must accept the contest terms to continue');
                 return;
             }
         }
@@ -179,6 +192,8 @@ export default function LoginScreen() {
         setShowForgotPassword(false);
         setError('');
         setSuccessMessage('');
+        setIsOver18(false);
+        setAcceptedContestTerms(false);
     };
 
     const toggleForgotPassword = () => {
@@ -390,6 +405,107 @@ export default function LoginScreen() {
                             returnKeyType='done'
                             onSubmitEditing={handleSubmit}
                         />
+                    )}
+
+                    {/* Age Verification & Contest Terms Checkboxes (Sign Up Only) */}
+                    {!showForgotPassword && isSignUp && (
+                        <View style={styles.checkboxContainer}>
+                            {/* 18+ Age Verification */}
+                            <TouchableOpacity
+                                style={styles.checkboxRow}
+                                onPress={() => setIsOver18(!isOver18)}
+                                activeOpacity={0.7}
+                            >
+                                <View
+                                    style={[
+                                        styles.checkbox,
+                                        {
+                                            borderColor: colors.INPUT_BORDER,
+                                            backgroundColor: isOver18
+                                                ? colors.BUTTON_COLOR
+                                                : colors.INPUT,
+                                        },
+                                    ]}
+                                >
+                                    {isOver18 && (
+                                        <Ionicons
+                                            name='checkmark'
+                                            size={scale(16)}
+                                            color={colors.BUTTON_TEXT}
+                                        />
+                                    )}
+                                </View>
+                                <Text
+                                    style={[
+                                        styles.checkboxLabel,
+                                        {
+                                            color: colors.TEXT,
+                                            fontSize: isTablet
+                                                ? moderateScale(10)
+                                                : moderateScale(12),
+                                        },
+                                    ]}
+                                >
+                                    I am 18 years of age or older
+                                </Text>
+                            </TouchableOpacity>
+
+                            {/* Contest Terms Acceptance */}
+                            <TouchableOpacity
+                                style={styles.checkboxRow}
+                                onPress={() => setAcceptedContestTerms(!acceptedContestTerms)}
+                                activeOpacity={0.7}
+                            >
+                                <View
+                                    style={[
+                                        styles.checkbox,
+                                        {
+                                            borderColor: colors.INPUT_BORDER,
+                                            backgroundColor: acceptedContestTerms
+                                                ? colors.BUTTON_COLOR
+                                                : colors.INPUT,
+                                        },
+                                    ]}
+                                >
+                                    {acceptedContestTerms && (
+                                        <Ionicons
+                                            name='checkmark'
+                                            size={scale(16)}
+                                            color={colors.BUTTON_TEXT}
+                                        />
+                                    )}
+                                </View>
+                                <View style={styles.checkboxLabelContainer}>
+                                    <Text
+                                        style={[
+                                            styles.checkboxLabel,
+                                            {
+                                                color: colors.TEXT,
+                                                fontSize: isTablet
+                                                    ? moderateScale(10)
+                                                    : moderateScale(12),
+                                            },
+                                        ]}
+                                    >
+                                        I agree to the{' '}
+                                        <Text
+                                            style={[
+                                                styles.linkTextInline,
+                                                { color: colors.BUTTON_COLOR },
+                                            ]}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                Linking.openURL(
+                                                    'https://hot-takes-18871.web.app/contest-rules.html'
+                                                );
+                                            }}
+                                        >
+                                            Contest Terms
+                                        </Text>
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
                     )}
 
                     {/* Main Action Button */}
@@ -613,5 +729,34 @@ const styles = StyleSheet.create({
     secondaryButtonText: {
         fontWeight: 'bold',
         letterSpacing: 1,
+    },
+    checkboxContainer: {
+        marginTop: scale(12),
+        marginBottom: scale(8),
+        gap: scale(12),
+    },
+    checkboxRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: scale(10),
+    },
+    checkbox: {
+        width: verticalScale(20),
+        height: verticalScale(20),
+        borderRadius: scale(4),
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: scale(2),
+    },
+    checkboxLabel: {
+        flex: 1,
+        lineHeight: scale(20),
+    },
+    checkboxLabelContainer: {
+        flex: 1,
+    },
+    linkTextInline: {
+        textDecorationLine: 'underline',
     },
 });
