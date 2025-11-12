@@ -95,11 +95,11 @@ export const DARK_THEME = {
     COLORS: DARK_COLORS,
     SIZES: {
         BLOCK_SHADOW_RADIUS: 2,
-    },
+  },
     colors: DARK_COLORS,
     sizes: {
         BLOCK_SHADOW_RADIUS: 2,
-    },
+  },
 };
 
 export default LIGHT_THEME;

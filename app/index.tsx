@@ -24,10 +24,10 @@ export default function Index() {
       // User is not signed in, go to login
       router.replace('/login');
     } else {
-      // User is signed in, go to tabs
+      // User is signed in, go to tabs (will redirect to take-creation)
       router.replace('/(tabs)');
     }
-  }, [user, loading, segments]);
+  }, [user, loading, segments, router]);
 
   // Show loading screen while checking auth state
   return (

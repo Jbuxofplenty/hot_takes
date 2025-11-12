@@ -15,6 +15,8 @@ import {
     View,
 } from 'react-native';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
+
+import { ThemedInput } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -357,21 +359,9 @@ export default function LoginScreen() {
                     )}
 
                     {/* Email Input */}
-                    <TextInput
+                    <ThemedInput
                         ref={emailRef}
-                        style={[
-                            styles.input,
-                            {
-                                backgroundColor: colors.INPUT,
-                                borderColor: colors.INPUT_BORDER,
-                                color: colors.TEXT,
-                                fontSize: isTablet ? moderateScale(10) : moderateScale(13),
-                                height: verticalScale(44),
-                                paddingHorizontal: scale(24),
-                            },
-                        ]}
                         placeholder='EMAIL'
-                        placeholderTextColor={colors.PLACEHOLDER}
                         value={email}
                         onChangeText={setEmail}
                         keyboardType='email-address'
@@ -389,21 +379,9 @@ export default function LoginScreen() {
 
                     {/* Password Input */}
                     {!showForgotPassword && (
-                        <TextInput
+                        <ThemedInput
                             ref={passwordRef}
-                            style={[
-                                styles.input,
-                                {
-                                    backgroundColor: colors.INPUT,
-                                    borderColor: colors.INPUT_BORDER,
-                                    color: colors.TEXT,
-                                    fontSize: isTablet ? moderateScale(10) : moderateScale(13),
-                                    height: verticalScale(44),
-                                    paddingHorizontal: scale(24),
-                                },
-                            ]}
                             placeholder='PASSWORD'
-                            placeholderTextColor={colors.PLACEHOLDER}
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
