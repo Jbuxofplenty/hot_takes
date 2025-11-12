@@ -1,18 +1,16 @@
 import { useAuth, useTheme } from '@/contexts';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 
 export default function ProfileScreen() {
     const { colors } = useTheme();
     const { user, logout } = useAuth();
-    const router = useRouter();
 
     const handleLogout = async () => {
         try {
             await logout();
-            router.replace('/login');
+            // Navigation will be handled automatically by the tab layout
         } catch (error) {
             console.error('Logout error:', error);
         }

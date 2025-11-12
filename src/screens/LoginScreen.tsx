@@ -536,7 +536,7 @@ export default function LoginScreen() {
                                 {showForgotPassword
                                     ? 'SEND RESET LINK'
                                     : isSignUp
-                                    ? 'SIGN UP'
+                                    ? 'CREATE ACCOUNT'
                                     : 'LOGIN'}
                             </Text>
                         )}

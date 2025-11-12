@@ -1,47 +1,32 @@
-import { useEffect } from 'react';
-import { useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth, useTheme } from '@/contexts';
+import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 export default function Index() {
-  const { user, loading } = useAuth();
-  const { colors } = useTheme();
-  const router = useRouter();
-  const segments = useSegments();
+    const { loading } = useAuth();
+    const { colors } = useTheme();
+    const router = useRouter();
 
-  useEffect(() => {
-    if (loading) return;
+    useEffect(() => {
+        if (loading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
+        // Always navigate to tabs layout - it will handle auth redirect
+        router.replace('/(tabs)');
+    }, [loading, router]);
 
-    if (!user && inAuthGroup) {
-      // User is not signed in and trying to access protected route
-      router.replace('/login');
-    } else if (user && !inAuthGroup) {
-      // User is signed in but on login screen
-      router.replace('/(tabs)');
-    } else if (!user) {
-      // User is not signed in, go to login
-      router.replace('/login');
-    } else {
-      // User is signed in, go to tabs (will redirect to take-creation)
-      router.replace('/(tabs)');
-    }
-  }, [user, loading, segments, router]);
-
-  // Show loading screen while checking auth state
-  return (
-    <View style={[styles.container, { backgroundColor: colors.BACKGROUND }]}>
-      <ActivityIndicator size="large" color={colors.PRIMARY} />
-    </View>
-  );
+    // Show loading screen while checking auth state
+    return (
+        <View style={[styles.container, { backgroundColor: colors.BACKGROUND }]}>
+            <ActivityIndicator size='large' color={colors.PRIMARY} />
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+    container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
 });
-
