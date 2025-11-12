@@ -126,37 +126,57 @@ else
 fi
 echo ""
 
-# App Store Connect API Key
-if [ -n "$APP_STORE_CONNECT_API_KEY_PATH" ] && [ -f "$APP_STORE_CONNECT_API_KEY_PATH" ]; then
-    echo "📤 Uploading App Store Connect API Key..."
-    
-    # Upload Key ID
-    if [ -n "$APP_STORE_CONNECT_API_KEY_ID" ]; then
-        gh secret set APP_STORE_CONNECT_API_KEY_ID --body "$APP_STORE_CONNECT_API_KEY_ID"
-        echo "✅ APP_STORE_CONNECT_API_KEY_ID uploaded"
-    else
-        echo "⚠️  APP_STORE_CONNECT_API_KEY_ID not set"
-        MISSING_VARS+=("APP_STORE_CONNECT_API_KEY_ID")
+# App Store Connect API Key (JSON format)
+# Priority: .env.fastlane > environment variable > auto-discovery
+API_KEY_JSON=""
+
+if [ -f ".env.fastlane" ]; then
+    # Load from .env.fastlane if it exists
+    ENV_API_KEY_PATH=$(grep "^APP_STORE_CONNECT_API_KEY_JSON_PATH=" .env.fastlane | cut -d'=' -f2 | tr -d ' "' | tr -d "'")
+    if [ -n "$ENV_API_KEY_PATH" ]; then
+        API_KEY_JSON="$ENV_API_KEY_PATH"
+        echo "📌 Using API key from .env.fastlane: $API_KEY_JSON"
     fi
-    
-    # Upload Issuer ID
-    if [ -n "$APP_STORE_CONNECT_ISSUER_ID" ]; then
-        gh secret set APP_STORE_CONNECT_ISSUER_ID --body "$APP_STORE_CONNECT_ISSUER_ID"
-        echo "✅ APP_STORE_CONNECT_ISSUER_ID uploaded"
-    else
-        echo "⚠️  APP_STORE_CONNECT_ISSUER_ID not set"
-        MISSING_VARS+=("APP_STORE_CONNECT_ISSUER_ID")
+fi
+
+# Fall back to environment variable if not set from .env.fastlane
+if [ -z "$API_KEY_JSON" ] && [ -n "$APP_STORE_CONNECT_API_KEY_JSON_PATH" ]; then
+    API_KEY_JSON="$APP_STORE_CONNECT_API_KEY_JSON_PATH"
+    echo "📌 Using API key from APP_STORE_CONNECT_API_KEY_JSON_PATH env var"
+fi
+
+# Fall back to auto-discovery if still not set
+if [ -z "$API_KEY_JSON" ]; then
+    API_KEY_JSON=$(ls fastlane/*.json 2>/dev/null | grep -v "google-service" | head -n 1)
+    if [ -n "$API_KEY_JSON" ]; then
+        echo "📌 Auto-discovered API key: $API_KEY_JSON"
     fi
-    
-    # Upload Key Content (preserving newlines with literal \n)
-    # GitHub Actions expects literal \n in the secret, not actual newlines
-    KEY_CONTENT=$(awk 'NF {printf "%s\\n", $0}' "$APP_STORE_CONNECT_API_KEY_PATH")
-    gh secret set APP_STORE_CONNECT_API_KEY_CONTENT --body "$KEY_CONTENT"
-    echo "✅ APP_STORE_CONNECT_API_KEY_CONTENT uploaded"
+fi
+
+if [ -z "$API_KEY_JSON" ] || [ ! -f "$API_KEY_JSON" ]; then
+    echo "⚠️  Warning: App Store Connect API Key JSON file not found"
+    echo "   iOS builds will fail without this key"
+    echo "   Download from: https://appstoreconnect.apple.com/access/api"
+    echo "   Convert .p8 to JSON format and place in fastlane/ directory"
+    echo ""
+    echo "   JSON format example:"
+    echo '   {'
+    echo '     "key_id": "YOUR_KEY_ID",'
+    echo '     "issuer_id": "YOUR_ISSUER_ID",'
+    echo '     "key": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----",'
+    echo '     "duration": 1200,'
+    echo '     "in_house": false'
+    echo '   }'
+    echo ""
+    echo "   Continuing with other secrets..."
+    MISSING_VARS+=("APP_STORE_CONNECT_API_KEY_JSON_PATH")
 else
-    echo "⚠️  Skipping App Store Connect API Key (file not found: $APP_STORE_CONNECT_API_KEY_PATH)"
-    echo "   You can still use APPLE_ID authentication instead"
-    MISSING_VARS+=("APP_STORE_CONNECT_API_KEY_PATH")
+    echo "📄 Found API Key JSON: $API_KEY_JSON"
+    
+    # Read and upload the entire JSON file
+    API_KEY_JSON_CONTENT=$(cat "$API_KEY_JSON")
+    gh secret set APP_STORE_CONNECT_API_KEY_JSON --body "$API_KEY_JSON_CONTENT"
+    echo "✅ APP_STORE_CONNECT_API_KEY_JSON uploaded"
 fi
 echo ""
 

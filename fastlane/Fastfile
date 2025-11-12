@@ -28,13 +28,12 @@ platform :ios do
     # Setup CI creates a temporary keychain for CI builds
     setup_ci if ENV['CI']
     
-    # Setup App Store Connect API Key if provided
+    # Setup App Store Connect API Key if provided (JSON format)
     api_key = nil
-    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
       api_key = app_store_connect_api_key(
-        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
-        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
-        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+        is_key_content_base64: false
       )
     end
     
@@ -102,13 +101,12 @@ platform :ios do
   lane :beta do
     build
     
-    # Setup App Store Connect API Key if provided
+    # Setup App Store Connect API Key if provided (JSON format)
     api_key = nil
-    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
       api_key = app_store_connect_api_key(
-        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
-        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
-        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+        is_key_content_base64: false
       )
     end
     
@@ -126,13 +124,12 @@ platform :ios do
   lane :release do
     build
     
-    # Setup App Store Connect API Key if provided
+    # Setup App Store Connect API Key if provided (JSON format)
     api_key = nil
-    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
       api_key = app_store_connect_api_key(
-        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
-        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
-        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
+        is_key_content_base64: false
       )
     end
     

@@ -52,6 +52,7 @@ GoogleService-Info.plist
 google-service-account.json
 AuthKey_RGCRWYWHJ8.p8
 *.keystore
+app_store_connect_api_key.json
 
 # Fastlane
 fastlane/report.xml

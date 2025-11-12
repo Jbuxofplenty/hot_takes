@@ -26,5 +26,20 @@
     "[markdown]": {
         "editor.tabSize": 2,
         "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/node_modules": true,
+        "!coral_clash/**": true,
+        "ios/**": true,
+        "android/**": true
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true
+    },
+    "explorer.excludeGitIgnore": false,
+    "search.useIgnoreFiles": false,
+    "files.associations": {
+        "coral_clash/**": "plaintext"
     }
 }
