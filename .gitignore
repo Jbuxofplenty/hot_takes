@@ -62,6 +62,10 @@ fastlane/test_output
 
 # Firebase
 .firebase/
+**/firebase-debug.log
+**/firestore-debug.log
+**/ui-debug.log
+**/database-debug.log
 
 # Misc
 coral_clash
