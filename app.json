@@ -11,9 +11,9 @@
         "userInterfaceStyle": "automatic",
         "newArchEnabled": true,
         "splash": {
-            "image": "./src/assets/images/splash-icon.png",
+            "image": "./src/assets/images/icon.png",
             "resizeMode": "contain",
-            "backgroundColor": "#ffffff"
+            "backgroundColor": "#808080"
         },
         "assetBundlePatterns": ["**/*"],
         "ios": {
@@ -91,7 +91,7 @@
                 "policy": "appVersion"
             },
             "adaptiveIcon": {
-                "backgroundColor": "#E6F4FE",
+                "backgroundColor": "#808080",
                 "foregroundImage": "./src/assets/images/android-icon-foreground.png",
                 "backgroundImage": "./src/assets/images/android-icon-background.png",
                 "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
@@ -128,12 +128,12 @@
             [
                 "expo-splash-screen",
                 {
-                    "image": "./src/assets/images/splash-icon.png",
+                    "image": "./src/assets/images/icon.png",
                     "imageWidth": 200,
                     "resizeMode": "contain",
-                    "backgroundColor": "#ffffff",
+                    "backgroundColor": "#808080",
                     "dark": {
-                        "backgroundColor": "#000000"
+                        "backgroundColor": "#505050"
                     }
                 }
             ],

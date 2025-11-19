@@ -1,4 +1,4 @@
-import {ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {ActivityIndicator, Alert, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
 import {useTheme} from '@/contexts';
 import {usePresence} from '@/hooks/use-presence';
@@ -13,6 +13,43 @@ export default function RewardsScreen() {
 
     // Get real-time rewards data
     const {rewardsData, loading, error} = useRewards();
+
+    const handleInvite = async () => {
+        try {
+            // Create the share message with platform-specific app store links
+            const appStoreUrl = Platform.select({
+                ios: 'https://apps.apple.com/app/hot-takes/id123456789',
+                android: 'https://play.google.com/store/apps/details?id=com.jbuxofplenty.hottakes',
+                default: 'https://hot-takes.web.app',
+            });
+
+            const shareMessage = `🔥 Join me on Hot Takes!\n\nShare your hottest takes and compete for weekly rewards.\n\nDownload now: ${appStoreUrl}`;
+
+            // Use React Native's Share API - works great for text/URLs
+            const result = await Share.share(
+                {
+                    message: shareMessage,
+                    title: 'Join Hot Takes',
+                },
+                {
+                    // iOS only: subject for email/messages
+                    subject: 'Join me on Hot Takes! 🔥',
+                }
+            );
+
+            if (result.action === Share.sharedAction) {
+                console.log('Content shared successfully');
+                if (result.activityType) {
+                    console.log('Shared via:', result.activityType);
+                }
+            } else if (result.action === Share.dismissedAction) {
+                console.log('Share dialog dismissed');
+            }
+        } catch (error) {
+            console.error('Share error:', error);
+            Alert.alert('Error', 'Unable to share. Please try again.');
+        }
+    };
 
     return (
         <View style={[styles.container, {backgroundColor: colors.BACKGROUND}]}>
@@ -109,12 +146,17 @@ export default function RewardsScreen() {
 
                         <TouchableOpacity
                             style={[styles.inviteButton, {backgroundColor: colors.BUTTON_COLOR}]}
+                            onPress={handleInvite}
+                            activeOpacity={0.7}
                         >
-                            <Text
-                                style={[styles.inviteButtonText, {color: colors.BUTTON_TEXT}]}
-                            >
-                                INVITE YOUR FRIENDS
-                            </Text>
+                            <View style={styles.inviteButtonContent}>
+                                <Ionicons name="share-social-outline" size={moderateScale(20)} color={colors.BUTTON_TEXT} style={styles.inviteIcon} />
+                                <Text
+                                    style={[styles.inviteButtonText, {color: colors.BUTTON_TEXT}]}
+                                >
+                                    INVITE YOUR FRIENDS
+                                </Text>
+                            </View>
                         </TouchableOpacity>
                     </>
                 ) : null}
@@ -234,6 +276,14 @@ const styles = StyleSheet.create({
     borderRadius: scale(25),
     alignItems: 'center',
     marginTop: verticalScale(24),
+  },
+  inviteButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteIcon: {
+    marginRight: scale(8),
   },
   inviteButtonText: {
     fontSize: moderateScale(16),
