@@ -46,6 +46,15 @@
   //     ]
   //   },
   // ]
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "presence",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "online", "mode": "ASCENDING" },
+        { "fieldPath": "lastSeen", "mode": "DESCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
