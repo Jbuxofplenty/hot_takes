@@ -79,8 +79,15 @@ jobs:
       - name: Setup App Store Connect API Key
         run: |
           mkdir -p ~/.appstoreconnect
-          echo '${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}' > ~/.appstoreconnect/api_key.json
+          cat > ~/.appstoreconnect/api_key.json << 'EOF'
+          ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
+          EOF
           echo "APP_STORE_CONNECT_API_KEY_JSON_PATH=$HOME/.appstoreconnect/api_key.json" >> $GITHUB_ENV
+          echo "✅ App Store Connect API Key configured"
+          echo "📄 Verifying JSON structure..."
+          if command -v jq &> /dev/null; then
+            jq -r '.key_id' ~/.appstoreconnect/api_key.json && echo "✅ key_id found" || echo "❌ key_id missing"
+          fi
 
       - name: Restore Firebase Service Files
         run: |
