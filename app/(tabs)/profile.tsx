@@ -1,18 +1,43 @@
 import { useAuth, useTheme } from '@/contexts';
 import { useFirebaseFunctions } from '@/hooks/use-firebase-functions';
+import MyHotTakesScreen from '@/screens/MyHotTakesScreen';
+import ReviewScreen from '@/screens/ReviewScreen';
 import { Ionicons } from '@expo/vector-icons';
+import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 
 export default function ProfileScreen() {
     const { colors, setThemePreference, themePreference } = useTheme();
     const { user, logout } = useAuth();
-    const { getUserSettings, updateUserSettings } = useFirebaseFunctions();
+    const { getUserSettings, updateUserSettings, getMyHotTakes } = useFirebaseFunctions();
     const [isAnonymous, setIsAnonymous] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [showMyTakes, setShowMyTakes] = useState(false);
+    const [showReview, setShowReview] = useState(false);
+    const [isReviewer, setIsReviewer] = useState(false);
+    const [stats, setStats] = useState({ submitted: 0, totalScore: 0 });
 
-    // Load settings on mount
+    // Check if user is a reviewer
+    const checkReviewerStatus = useCallback(async () => {
+        if (!user) return;
+
+        try {
+            const db = getFirestore();
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                setIsReviewer(userData?.reviewer === true);
+            }
+        } catch (error) {
+            console.error('Error checking reviewer status:', error);
+        }
+    }, [user]);
+
+    // Load settings and stats on mount
     const loadSettings = useCallback(async () => {
         if (!user) return;
 
@@ -25,9 +50,31 @@ export default function ProfileScreen() {
         }
     }, [user, getUserSettings]);
 
+    const loadStats = useCallback(async () => {
+        if (!user) return;
+
+        try {
+            const result = await getMyHotTakes(100);
+            const approvedTakes = result.hotTakes.filter((take: any) => take.status === 'approved');
+            const totalScore = approvedTakes.reduce(
+                (sum: number, take: any) =>
+                    sum + (take.averageScore || 0) * (take.totalScores || 0),
+                0
+            );
+            setStats({
+                submitted: approvedTakes.length,
+                totalScore: Math.round(totalScore),
+            });
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }, [user, getMyHotTakes]);
+
     useEffect(() => {
+        checkReviewerStatus();
         loadSettings();
-    }, [loadSettings]);
+        loadStats();
+    }, [checkReviewerStatus, loadSettings, loadStats]);
 
     const handleLogout = async () => {
         try {
@@ -94,14 +141,18 @@ export default function ProfileScreen() {
                 {/* Stats */}
                 <View style={[styles.statsContainer, { backgroundColor: colors.CARD_BACKGROUND }]}>
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: colors.TEXT }]}>0</Text>
+                        <Text style={[styles.statValue, { color: colors.TEXT }]}>
+                            {stats.submitted}
+                        </Text>
                         <Text style={[styles.statLabel, { color: colors.TEXT_SECONDARY }]}>
                             Hot Takes Submitted
                         </Text>
                     </View>
                     <View style={[styles.statDivider, { backgroundColor: colors.DIVIDER }]} />
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: colors.TEXT }]}>0</Text>
+                        <Text style={[styles.statValue, { color: colors.TEXT }]}>
+                            {stats.totalScore}
+                        </Text>
                         <Text style={[styles.statLabel, { color: colors.TEXT_SECONDARY }]}>
                             Total Heat Score
                         </Text>
@@ -112,11 +163,33 @@ export default function ProfileScreen() {
                 <View style={styles.actionsContainer}>
                     <TouchableOpacity
                         style={[styles.actionButton, { backgroundColor: colors.CARD_BACKGROUND }]}
+                        onPress={() => setShowMyTakes(true)}
                     >
                         <Text style={[styles.actionButtonText, { color: colors.TEXT }]}>
                             My Hot Takes
                         </Text>
                     </TouchableOpacity>
+
+                    {/* Reviewer Button */}
+                    {isReviewer && (
+                        <TouchableOpacity
+                            style={[
+                                styles.actionButton,
+                                styles.reviewerButton,
+                                { backgroundColor: colors.PRIMARY },
+                            ]}
+                            onPress={() => setShowReview(true)}
+                        >
+                            <Ionicons
+                                name='shield-checkmark'
+                                size={moderateScale(20)}
+                                color='#FFF'
+                            />
+                            <Text style={[styles.reviewerButtonText, { color: '#FFF' }]}>
+                                Review Content
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Settings Section */}
@@ -195,6 +268,26 @@ export default function ProfileScreen() {
                     <Text style={[styles.logoutButtonText, { color: colors.WHITE }]}>Logout</Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            {/* My Hot Takes Modal */}
+            <Modal
+                visible={showMyTakes}
+                animationType='slide'
+                presentationStyle='fullScreen'
+                onRequestClose={() => setShowMyTakes(false)}
+            >
+                <MyHotTakesScreen onClose={() => setShowMyTakes(false)} />
+            </Modal>
+
+            {/* Review Modal */}
+            <Modal
+                visible={showReview}
+                animationType='slide'
+                presentationStyle='fullScreen'
+                onRequestClose={() => setShowReview(false)}
+            >
+                <ReviewScreen onClose={() => setShowReview(false)} />
+            </Modal>
         </View>
     );
 }
@@ -330,6 +423,15 @@ const styles = StyleSheet.create({
     actionButtonText: {
         fontSize: moderateScale(16),
         fontWeight: '600',
+    },
+    reviewerButton: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: scale(8),
+    },
+    reviewerButtonText: {
+        fontSize: moderateScale(16),
+        fontWeight: 'bold',
     },
     settingsSection: {
         marginTop: verticalScale(8),

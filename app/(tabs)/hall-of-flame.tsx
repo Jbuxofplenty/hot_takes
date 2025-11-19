@@ -1,139 +1,248 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useAuth, useTheme } from '@/contexts';
+import { useFirebaseFunctions } from '@/hooks/use-firebase-functions';
+import HotTakeCard from '@/components/HotTakeCard';
+import LoginScreen from '@/screens/LoginScreen';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/contexts';
+import { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    FlatList,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 
+interface HotTakeFeed {
+    id: string;
+    text: string;
+    userId: string;
+    userDisplayName: string;
+    createdAt: number;
+    totalScores: number;
+    averageScore: number;
+    userScore: number | null;
+    rank?: number;
+}
+
 export default function HallOfFlameScreen() {
-  const { colors } = useTheme();
+    const { colors } = useTheme();
+    const { user } = useAuth();
+    const { getTopHotTakes, scoreHotTake } = useFirebaseFunctions();
+    const [hotTakes, setHotTakes] = useState<HotTakeFeed[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+    const [lastId, setLastId] = useState<string | null>(null);
 
-  // Mock data for top hot takes
-  const topTakes = [
-    {
-      id: 1,
-      text: "The crowd became the critic, and truth became whatever echoed the loudest.",
-      author: "HotDog456",
-      heatScore: 86,
-    },
-    {
-      id: 2,
-      text: "The algorithm knows us better than our ancestors ever could and loves us far less.",
-      author: "BobSmith823",
-      heatScore: 68,
-    },
-    {
-      id: 3,
-      text: "We stopped seeking wisdom now we just collect opinions that flatter us.",
-      author: "WandaBreed23",
-      heatScore: 54,
-    },
-  ];
+    const loadTopTakes = useCallback(
+        async (refresh = false) => {
+            try {
+                if (refresh) {
+                    setRefreshing(true);
+                    setLastId(null);
+                }
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.BACKGROUND }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.BLACK }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.ERROR }]}>Hall of Flame</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.TEXT }]}>Hot Takes</Text>
+                const result = await getTopHotTakes(20, refresh ? undefined : lastId || undefined);
+
+                if (refresh) {
+                    setHotTakes(result.hotTakes);
+                } else {
+                    setHotTakes((prev) => [...prev, ...result.hotTakes]);
+                }
+
+                setHasMore(result.hasMore);
+                setLastId(result.lastId);
+            } catch (error) {
+                console.error('Error loading top hot takes:', error);
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
+                setLoadingMore(false);
+            }
+        },
+        [getTopHotTakes, lastId]
+    );
+
+    useEffect(() => {
+        if (user) {
+            loadTopTakes(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user]);
+
+    const handleScoreSubmit = async (hotTakeId: string, score: number) => {
+        await scoreHotTake(hotTakeId, score);
+        // Reload to get updated stats
+        loadTopTakes(true);
+    };
+
+    const handleRefresh = () => {
+        loadTopTakes(true);
+    };
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore && !refreshing) {
+            setLoadingMore(true);
+            loadTopTakes(false);
+        }
+    };
+
+    const renderHeader = () => (
+        <View style={styles.headerSection}>
+            <Text style={[styles.sectionTitle, { color: colors.TEXT }]}>
+                🏆 All-Time Top Takes
+            </Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.TEXT_SECONDARY }]}>
+                Highest scored hot takes ever
+            </Text>
         </View>
-        <Ionicons name="thermometer-outline" size={moderateScale(28)} color={colors.PRIMARY} />
-      </View>
+    );
 
-      {/* Subtitle */}
-      <View style={styles.subtitleContainer}>
-        <Text style={[styles.subtitle, { color: colors.TEXT }]}>
-          LAST WEEK&apos;S HOTTEST TAKES
-        </Text>
-      </View>
+    const renderFooter = () => {
+        if (!loadingMore) return null;
 
-      {/* Content */}
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {topTakes.map((take) => (
-          <View
-            key={take.id}
-            style={[styles.takeCard, { borderBottomColor: colors.BLACK }]}
-          >
-            <Text style={[styles.takeText, { color: colors.TEXT }]}>{take.text}</Text>
-            
-            <View style={styles.footer}>
-              <Text style={[styles.author, { color: colors.TEXT_SECONDARY }]}>
-                Submitted by {take.author}
-              </Text>
-              <View style={styles.scoreContainer}>
-                <Text style={[styles.scoreLabel, { color: colors.TEXT }]}>HEAT SCORE</Text>
-                <Text style={[styles.scoreValue, { color: colors.TEXT }]}>
-                  {take.heatScore}
+        return (
+            <View style={styles.footerLoader}>
+                <ActivityIndicator size='small' color={colors.PRIMARY} />
+                <Text style={[styles.footerText, { color: colors.TEXT_SECONDARY }]}>
+                    Loading more...
                 </Text>
-              </View>
             </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
+        );
+    };
+
+    const renderEmpty = () => (
+        <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>🏆</Text>
+            <Text style={[styles.emptyText, { color: colors.TEXT }]}>
+                No scored hot takes yet!
+            </Text>
+            <Text style={[styles.emptySubtext, { color: colors.TEXT_SECONDARY }]}>
+                Be the first to score some takes
+            </Text>
+        </View>
+    );
+
+    if (!user) {
+        return <LoginScreen />;
+    }
+
+    return (
+        <View style={[styles.container, { backgroundColor: colors.BACKGROUND }]}>
+            {/* Header */}
+            <View style={[styles.header, { borderBottomColor: colors.BLACK }]}>
+                <View>
+                    <Text style={[styles.headerTitle, { color: colors.ERROR }]}>
+                        Hall of Flame
+                    </Text>
+                    <Text style={[styles.headerSubtitle, { color: colors.TEXT }]}>
+                        Top Hot Takes
+                    </Text>
+                </View>
+                <Ionicons name='trophy' size={moderateScale(28)} color={colors.PRIMARY} />
+            </View>
+
+            {/* Content */}
+            {loading ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size='large' color={colors.PRIMARY} />
+                </View>
+            ) : (
+                <FlatList
+                    data={hotTakes}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                        <HotTakeCard
+                            {...item}
+                            isOwnTake={item.userId === user.uid}
+                            onScoreSubmit={handleScoreSubmit}
+                        />
+                    )}
+                    contentContainerStyle={styles.listContent}
+                    ListHeaderComponent={renderHeader}
+                    ListFooterComponent={renderFooter}
+                    ListEmptyComponent={renderEmpty}
+                    onRefresh={handleRefresh}
+                    refreshing={refreshing}
+                    onEndReached={handleLoadMore}
+                    onEndReachedThreshold={0.5}
+                    showsVerticalScrollIndicator={false}
+                />
+            )}
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(60),
-    paddingBottom: verticalScale(16),
-    borderBottomWidth: 2,
-  },
-  headerTitle: {
-    fontSize: moderateScale(20),
-    fontWeight: 'bold',
-  },
-  headerSubtitle: {
-    fontSize: moderateScale(16),
-    fontWeight: '600',
-  },
-  subtitleContainer: {
-    paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(12),
-  },
-  subtitle: {
-    fontSize: moderateScale(11),
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  takeCard: {
-    padding: scale(20),
-    borderBottomWidth: 1,
-  },
-  takeText: {
-    fontSize: moderateScale(16),
-    lineHeight: moderateScale(24),
-    marginBottom: verticalScale(16),
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  author: {
-    fontSize: moderateScale(12),
-  },
-  scoreContainer: {
-    alignItems: 'flex-end',
-  },
-  scoreLabel: {
-    fontSize: moderateScale(10),
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  scoreValue: {
-    fontSize: moderateScale(24),
-    fontWeight: 'bold',
-  },
+    container: {
+        flex: 1,
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: scale(20),
+        paddingTop: verticalScale(60),
+        paddingBottom: verticalScale(16),
+        borderBottomWidth: 2,
+    },
+    headerTitle: {
+        fontSize: moderateScale(20),
+        fontWeight: 'bold',
+    },
+    headerSubtitle: {
+        fontSize: moderateScale(16),
+        fontWeight: '600',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    listContent: {
+        padding: scale(16),
+        paddingBottom: verticalScale(32),
+    },
+    headerSection: {
+        marginBottom: verticalScale(20),
+    },
+    sectionTitle: {
+        fontSize: moderateScale(24),
+        fontWeight: 'bold',
+        marginBottom: verticalScale(4),
+    },
+    sectionSubtitle: {
+        fontSize: moderateScale(14),
+    },
+    footerLoader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: verticalScale(20),
+        gap: scale(8),
+    },
+    footerText: {
+        fontSize: moderateScale(13),
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: verticalScale(80),
+    },
+    emptyEmoji: {
+        fontSize: moderateScale(64),
+        marginBottom: verticalScale(16),
+    },
+    emptyText: {
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        marginBottom: verticalScale(8),
+    },
+    emptySubtext: {
+        fontSize: moderateScale(14),
+        textAlign: 'center',
+    },
 });
-

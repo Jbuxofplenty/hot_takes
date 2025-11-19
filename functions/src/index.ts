@@ -35,5 +35,21 @@ export {
 // Export rewards functions
 export {getRewardsInfo} from "./routes/rewards";
 
+// Export hot takes functions
+export {
+  submitHotTake,
+  approveHotTake,
+  rejectHotTake,
+  getPendingReviews,
+  getMyHotTakes,
+  getHotTakes,
+} from "./routes/hotTakes";
+
+// Export scoring functions
+export {scoreHotTake, getHotTakesFeed, getTopHotTakes} from "./routes/scoring";
+
+// Export triggers
+export {onHotTakeNeedsReview} from "./triggers/onHotTakeCreate";
+
 // Export scheduled functions
 export {cleanupStalePresenceScheduled} from "./scheduled/cleanupPresence";
