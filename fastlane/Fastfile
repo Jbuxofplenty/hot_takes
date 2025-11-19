@@ -28,20 +28,11 @@ platform :ios do
     # Setup CI creates a temporary keychain for CI builds
     setup_ci if ENV['CI']
     
-    # Setup App Store Connect API Key if provided (JSON format)
-    api_key = nil
-    if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
-      api_key = app_store_connect_api_key(
-        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
-        is_key_content_base64: false
-      )
-    end
-    
     # Get latest build number from App Store Connect and increment
     # This checks ALL builds across all versions to ensure we never go backwards
     begin
       latest_build = latest_testflight_build_number(
-        api_key: api_key,
+        api_key_path: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
         app_identifier: IOS_APP_IDENTIFIER
         # Not specifying version - gets highest build across ALL versions
       )
@@ -64,12 +55,13 @@ platform :ios do
     
     # Sync code signing first to download provisioning profiles
     # Force regenerate if needed to include all capabilities (Associated Domains, Push Notifications)
-    sync_code_signing(
+    match_params = {
       type: "appstore",
       readonly: is_ci,
-      api_key: api_key,
       force_for_new_devices: !is_ci  # Regenerate locally if devices change
-    )
+    }
+    match_params[:api_key_path] = ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"] if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
+    sync_code_signing(match_params)
     
     # Configure manual code signing (expo prebuild defaults to automatic)
     # Must be done AFTER sync_code_signing downloads the profile
@@ -101,48 +93,32 @@ platform :ios do
   lane :beta do
     build
     
-    # Setup App Store Connect API Key if provided (JSON format)
-    api_key = nil
-    if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
-      api_key = app_store_connect_api_key(
-        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
-        is_key_content_base64: false
-      )
-    end
-    
     # Upload to TestFlight
-    upload_to_testflight(
-      api_key: api_key,
+    upload_params = {
       skip_waiting_for_build_processing: true,
       skip_submission: true,
       distribute_external: false,
       changelog: ENV["CHANGELOG"] || "Bug fixes and performance improvements"
-    )
+    }
+    upload_params[:api_key_path] = ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"] if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
+    upload_to_testflight(upload_params)
   end
 
   desc "Upload to App Store"
   lane :release do
     build
     
-    # Setup App Store Connect API Key if provided (JSON format)
-    api_key = nil
-    if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
-      api_key = app_store_connect_api_key(
-        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"],
-        is_key_content_base64: false
-      )
-    end
-    
     # Upload to App Store
-    upload_to_app_store(
-      api_key: api_key,
+    upload_params = {
       skip_metadata: true,
       skip_screenshots: true,
       submit_for_review: false,
       automatic_release: false,
       force: true,
       precheck_include_in_app_purchases: false
-    )
+    }
+    upload_params[:api_key_path] = ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"] if ENV["APP_STORE_CONNECT_API_KEY_JSON_PATH"]
+    upload_to_app_store(upload_params)
   end
 end
 
