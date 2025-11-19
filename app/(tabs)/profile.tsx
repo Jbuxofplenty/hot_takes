@@ -1,11 +1,33 @@
 import { useAuth, useTheme } from '@/contexts';
+import { useFirebaseFunctions } from '@/hooks/use-firebase-functions';
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 
 export default function ProfileScreen() {
-    const { colors } = useTheme();
+    const { colors, setThemePreference, themePreference } = useTheme();
     const { user, logout } = useAuth();
+    const { getUserSettings, updateUserSettings } = useFirebaseFunctions();
+    const [isAnonymous, setIsAnonymous] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // Load settings on mount
+    const loadSettings = useCallback(async () => {
+        if (!user) return;
+
+        try {
+            const result = await getUserSettings();
+            setIsAnonymous(result.settings.isAnonymous);
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            // Silently fail - use default values
+        }
+    }, [user, getUserSettings]);
+
+    useEffect(() => {
+        loadSettings();
+    }, [loadSettings]);
 
     const handleLogout = async () => {
         try {
@@ -13,6 +35,35 @@ export default function ProfileScreen() {
             // Navigation will be handled automatically by the tab layout
         } catch (error) {
             console.error('Logout error:', error);
+        }
+    };
+
+    const handleAnonymousToggle = async (value: boolean) => {
+        setIsAnonymous(value);
+
+        try {
+            setSaving(true);
+            await updateUserSettings({ isAnonymous: value });
+        } catch (error) {
+            console.error('Error saving anonymous setting:', error);
+            // Revert on error
+            setIsAnonymous(!value);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleThemeChange = async (theme: 'light' | 'dark' | 'auto') => {
+        setThemePreference(theme);
+
+        try {
+            setSaving(true);
+            await updateUserSettings({ theme });
+        } catch (error) {
+            console.error('Error saving theme:', error);
+            // Note: Don't revert theme preference as it's already changed in context
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -57,7 +108,7 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-                {/* Actions */}
+                {/* Quick Actions */}
                 <View style={styles.actionsContainer}>
                     <TouchableOpacity
                         style={[styles.actionButton, { backgroundColor: colors.CARD_BACKGROUND }]}
@@ -66,34 +117,137 @@ export default function ProfileScreen() {
                             My Hot Takes
                         </Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.CARD_BACKGROUND }]}
-                    >
-                        <Text style={[styles.actionButtonText, { color: colors.TEXT }]}>
-                            Settings
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.CARD_BACKGROUND }]}
-                    >
-                        <Text style={[styles.actionButtonText, { color: colors.TEXT }]}>
-                            Help & Support
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.logoutButton, { backgroundColor: colors.ERROR }]}
-                        onPress={handleLogout}
-                    >
-                        <Text style={[styles.logoutButtonText, { color: colors.WHITE }]}>
-                            Logout
-                        </Text>
-                    </TouchableOpacity>
                 </View>
+
+                {/* Settings Section */}
+                <View style={styles.settingsSection}>
+                    <Text style={[styles.sectionTitle, { color: colors.TEXT }]}>Settings</Text>
+
+                    {/* Anonymous Posting Toggle */}
+                    <View style={[styles.settingCard, { backgroundColor: colors.CARD_BACKGROUND }]}>
+                        <View style={styles.settingRow}>
+                            <View style={styles.settingInfo}>
+                                <Text style={[styles.settingLabel, { color: colors.TEXT }]}>
+                                    Post Anonymously
+                                </Text>
+                                <Text
+                                    style={[
+                                        styles.settingDescription,
+                                        { color: colors.TEXT_SECONDARY },
+                                    ]}
+                                >
+                                    Hide your username on Hot Takes
+                                </Text>
+                            </View>
+                            <Switch
+                                value={isAnonymous}
+                                onValueChange={handleAnonymousToggle}
+                                trackColor={{ false: colors.DIVIDER, true: colors.PRIMARY }}
+                                thumbColor={colors.WHITE}
+                                disabled={saving}
+                            />
+                        </View>
+                    </View>
+
+                    {/* Theme Selection */}
+                    <View style={[styles.settingCard, { backgroundColor: colors.CARD_BACKGROUND }]}>
+                        <Text
+                            style={[
+                                styles.settingLabel,
+                                { color: colors.TEXT, marginBottom: verticalScale(12) },
+                            ]}
+                        >
+                            Appearance
+                        </Text>
+                        <ThemeOption
+                            label='Light'
+                            description='Always use light theme'
+                            selected={themePreference === 'light'}
+                            onSelect={() => handleThemeChange('light')}
+                            colors={colors}
+                            disabled={saving}
+                        />
+                        <ThemeOption
+                            label='Dark'
+                            description='Always use dark theme'
+                            selected={themePreference === 'dark'}
+                            onSelect={() => handleThemeChange('dark')}
+                            colors={colors}
+                            disabled={saving}
+                        />
+                        <ThemeOption
+                            label='Auto'
+                            description='Match system theme'
+                            selected={themePreference === 'auto'}
+                            onSelect={() => handleThemeChange('auto')}
+                            colors={colors}
+                            disabled={saving}
+                            last
+                        />
+                    </View>
+                </View>
+
+                {/* Logout Button */}
+                <TouchableOpacity
+                    style={[styles.logoutButton, { backgroundColor: colors.ERROR }]}
+                    onPress={handleLogout}
+                >
+                    <Text style={[styles.logoutButtonText, { color: colors.WHITE }]}>Logout</Text>
+                </TouchableOpacity>
             </ScrollView>
         </View>
+    );
+}
+
+interface ThemeOptionProps {
+    label: string;
+    description: string;
+    selected: boolean;
+    onSelect: () => void;
+    colors: any;
+    disabled?: boolean;
+    last?: boolean;
+}
+
+function ThemeOption({
+    label,
+    description,
+    selected,
+    onSelect,
+    colors,
+    disabled = false,
+    last = false,
+}: ThemeOptionProps) {
+    return (
+        <TouchableOpacity
+            onPress={onSelect}
+            disabled={disabled}
+            style={[
+                styles.themeOption,
+                { borderBottomColor: colors.DIVIDER },
+                last && styles.themeOptionLast,
+            ]}
+        >
+            <View style={styles.themeOptionContent}>
+                <Text
+                    style={[
+                        styles.themeOptionLabel,
+                        { color: colors.TEXT },
+                        selected && styles.themeOptionLabelBold,
+                    ]}
+                >
+                    {label}
+                </Text>
+                <Text style={[styles.themeOptionDescription, { color: colors.TEXT_SECONDARY }]}>
+                    {description}
+                </Text>
+            </View>
+            {selected && (
+                <View style={[styles.checkmark, { backgroundColor: colors.PRIMARY }]}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                </View>
+            )}
+        </TouchableOpacity>
     );
 }
 
@@ -165,6 +319,7 @@ const styles = StyleSheet.create({
     },
     actionsContainer: {
         gap: scale(12),
+        marginBottom: verticalScale(24),
     },
     actionButton: {
         paddingVertical: verticalScale(16),
@@ -175,6 +330,70 @@ const styles = StyleSheet.create({
     actionButtonText: {
         fontSize: moderateScale(16),
         fontWeight: '600',
+    },
+    settingsSection: {
+        marginTop: verticalScale(8),
+    },
+    sectionTitle: {
+        fontSize: moderateScale(20),
+        fontWeight: 'bold',
+        marginBottom: verticalScale(12),
+    },
+    settingCard: {
+        padding: scale(20),
+        borderRadius: scale(12),
+        marginBottom: verticalScale(12),
+    },
+    settingRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    settingInfo: {
+        flex: 1,
+        marginRight: scale(16),
+    },
+    settingLabel: {
+        fontSize: moderateScale(16),
+        fontWeight: '600',
+        marginBottom: verticalScale(4),
+    },
+    settingDescription: {
+        fontSize: moderateScale(13),
+    },
+    themeOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: verticalScale(16),
+        borderBottomWidth: 1,
+    },
+    themeOptionLast: {
+        borderBottomWidth: 0,
+    },
+    themeOptionContent: {
+        flex: 1,
+    },
+    themeOptionLabel: {
+        fontSize: moderateScale(16),
+        marginBottom: verticalScale(4),
+    },
+    themeOptionLabelBold: {
+        fontWeight: '600',
+    },
+    themeOptionDescription: {
+        fontSize: moderateScale(13),
+    },
+    checkmark: {
+        width: scale(24),
+        height: scale(24),
+        borderRadius: scale(12),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    checkmarkText: {
+        fontSize: moderateScale(16),
+        color: '#fff',
+        fontWeight: 'bold',
     },
     logoutButton: {
         paddingVertical: verticalScale(16),
