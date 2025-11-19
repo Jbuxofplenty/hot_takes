@@ -31,3 +31,9 @@ export {
   updateUserSettings,
   resetUserSettings,
 } from "./routes/userSettings";
+
+// Export rewards functions
+export {getRewardsInfo} from "./routes/rewards";
+
+// Export scheduled functions
+export {cleanupStalePresenceScheduled} from "./scheduled/cleanupPresence";

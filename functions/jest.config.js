@@ -4,7 +4,7 @@ module.exports = {
     roots: ['<rootDir>/src'],
     testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
     transform: {
-        '^.+\\.ts$': 'ts-jest',
+        '^.+\\.ts$': ['ts-jest', {}],
     },
     collectCoverageFrom: [
         'src/**/*.ts',
@@ -13,5 +13,10 @@ module.exports = {
     ],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
+    moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+    transformIgnorePatterns: [
+        'node_modules/(?!(firebase-functions|firebase-admin)/)',
+    ],
+    clearMocks: true,
 };
 
