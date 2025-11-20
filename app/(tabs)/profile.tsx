@@ -3,6 +3,7 @@ import { useFirebaseFunctions } from '@/hooks/use-firebase-functions';
 import MyHotTakesScreen from '@/screens/MyHotTakesScreen';
 import ReviewScreen from '@/screens/ReviewScreen';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -79,7 +80,7 @@ export default function ProfileScreen() {
     const handleLogout = async () => {
         try {
             await logout();
-            // Navigation will be handled automatically by the tab layout
+            router.replace('/login');
         } catch (error) {
             console.error('Logout error:', error);
         }
