@@ -369,8 +369,13 @@ describe("Scoring Functions", () => {
       };
 
       const now = Date.now();
-      const currentWeekStart = now - (3 * 24 * 60 * 60 * 1000); // 3 days ago
-      const lastWeekDate = now - (10 * 24 * 60 * 60 * 1000); // 10 days ago
+      const oneWeek = 7 * 24 * 60 * 60 * 1000;
+      const startOfCurrentWeek = now - (now % oneWeek);
+      
+      // Create one take in current week (using the same calculation as the implementation)
+      const currentWeekDate = startOfCurrentWeek + (1 * 24 * 60 * 60 * 1000); // 1 day after week start
+      // Create one take in previous week
+      const lastWeekDate = startOfCurrentWeek - (2 * 24 * 60 * 60 * 1000); // 2 days before week start
 
       const mockHotTakes = [
         {
@@ -379,7 +384,7 @@ describe("Scoring Functions", () => {
             text: "Current week take",
             userId: "user1",
             userDisplayName: "User One",
-            createdAt: {toMillis: () => currentWeekStart},
+            createdAt: {toMillis: () => currentWeekDate},
             status: "approved",
             totalScores: 50,
             averageScore: 85,
@@ -425,8 +430,8 @@ describe("Scoring Functions", () => {
       const result = await getHotTakesFeedHandler(mockRequest);
 
       expect(result.success).toBe(true);
-      expect(result.currentWeek.length).toBeGreaterThan(0);
-      expect(result.previousWeeks.length).toBeGreaterThan(0);
+      expect(result.currentWeek.length).toBe(1);
+      expect(result.previousWeeks.length).toBe(1);
       expect(result.totalTakes).toBe(2);
     });
   });
