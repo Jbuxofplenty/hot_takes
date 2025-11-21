@@ -13,7 +13,7 @@
         "test:ci": "jest --coverage --watchAll=false --ci --passWithNoTests"
     },
     "engines": {
-        "node": ">=22"
+        "node": "22"
     },
     "main": "lib/index.js",
     "dependencies": {
